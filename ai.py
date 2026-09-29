@@ -190,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
 
     server = HTTPServer(
-        ("127.0.0.1", 8001),
+        ("0.0.0.0", int(os.environ.get("PORT", "8001"))),
         Handler
     )
 
