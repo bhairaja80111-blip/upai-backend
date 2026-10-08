@@ -1,4 +1,3 @@
-history_text = "\n".join(str(x) for x in HISTORY[-10:])
 import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -27,29 +26,17 @@ class Handler(BaseHTTPRequestHandler):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
 
         self.send_response(status)
-        self.send_header(
-            "Content-Type",
-            "application/json; charset=utf-8"
-        )
-        self.send_header(
-            "Access-Control-Allow-Origin",
-            "*"
-        )
-        self.send_header(
-            "Access-Control-Allow-Headers",
-            "Content-Type"
-        )
-        self.send_header(
-            "Access-Control-Allow-Methods",
-            "POST, OPTIONS"
-        )
-        self.send_header(
-            "Content-Length",
-            str(len(body))
-        )
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
 
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_OPTIONS(self):
         self.send_json({})
@@ -57,52 +44,37 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
 
         if self.path != "/chat":
-            self.send_json(
-                {"error": "Not found"},
-                404
-            )
+            self.send_json({"error": "Not found"}, 404)
             return
 
         try:
-            length = int(
-                self.headers.get("Content-Length", 0)
-            )
+            length = int(self.headers.get("Content-Length", 0))
 
-            raw_data = self.rfile.read(length)
-
-            data = json.loads(
-                raw_data.decode("utf-8")
-            )
-
-            user_message = str(
-                data.get("message", "")
-            ).strip()
-
-            if not user_message:
-                self.send_json(
-                    {"error": "Message खाली है"},
-                    400
-                )
+            if length <= 0:
+                self.send_json({"error": "Message खाली है"}, 400)
                 return
 
-            api_key = os.environ.get(
-                "GEMINI_API_KEY"
-            )
+            raw_data = self.rfile.read(length)
+            data = json.loads(raw_data.decode("utf-8"))
+
+            user_message = str(data.get("message", "")).strip()
+
+            if not user_message:
+                self.send_json({"error": "Message खाली है"}, 400)
+                return
+
+            api_key = os.environ.get("GEMINI_API_KEY")
 
             if not api_key:
                 self.send_json(
-                    {
-                        "error": (
-                            "GEMINI_API_KEY नहीं मिली।"
-                        )
-                    },
+                    {"error": "GEMINI_API_KEY नहीं मिली।"},
                     500
                 )
                 return
 
             HISTORY.append({"user": user_message})
-          
-  history_text = "\n".join(str(x) for x in HISTORY[-4:])
+
+            history_text = "\n".join(str(x) for x in HISTORY[-4:])
 
             prompt = (
                 SYSTEM_INSTRUCTION
@@ -114,13 +86,13 @@ class Handler(BaseHTTPRequestHandler):
                 GEMINI_URL,
                 headers={
                     "x-goog-api-key": api_key,
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 json={
                     "model": MODEL,
-                    "input": prompt
+                    "input": prompt,
                 },
-                timeout=120
+                timeout=60,
             )
 
             if not response.ok:
@@ -141,20 +113,14 @@ class Handler(BaseHTTPRequestHandler):
                 if step.get("type") != "model_output":
                     continue
 
-                for content in step.get(
-                    "content", []
-                ):
+                for content in step.get("content", []):
                     if content.get("type") == "text":
-                        answer += content.get(
-                            "text", ""
-                        )
+                        answer += content.get("text", "")
 
             if not answer:
                 self.send_json(
                     {
-                        "error": (
-                            "Gemini से जवाब नहीं मिला।"
-                        ),
+                        "error": "Gemini से जवाब नहीं मिला।",
                         "details": result
                     },
                     500
@@ -162,13 +128,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             answer = answer.strip()
+
             HISTORY.append({"assistant": answer})
 
-            self.send_json(
-                {
-                    "answer": answer
-                }
-            )
+            self.send_json({"answer": answer})
 
         except requests.RequestException as e:
             self.send_json(
@@ -193,11 +156,11 @@ if __name__ == "__main__":
 
     server = HTTPServer(
         ("0.0.0.0", int(os.environ.get("PORT", "8001"))),
-        Handler
+        Handler,
     )
 
     print("🤖 UP AI Bridge शुरू हो गया")
     print("📡 http://127.0.0.1:8001")
-    print("🧠 Model: gemini-3.8-flash")
+    print("🧠 Model:", MODEL)
 
     server.serve_forever()
