@@ -1,3 +1,4 @@
+history_text = "\n".join(str(x) for x in HISTORY[-10:])
 import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -100,7 +101,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             HISTORY.append({"user": user_message})
-            history_text = "\n".join(str(x) for x in HISTORY[-10:])
+          
+  history_text = "\n".join(str(x) for x in HISTORY[-4:])
 
             prompt = (
                 SYSTEM_INSTRUCTION
