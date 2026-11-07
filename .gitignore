@@ -1,0 +1,4 @@
+*.backup
+*.before-*
+__pycache__/
+.env

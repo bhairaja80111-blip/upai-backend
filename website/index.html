@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>UP AI</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b1220;color:white;font-family:Arial;height:100dvh;overflow:hidden}
+header{height:70px;background:#14233a;display:flex;align-items:center;padding:12px 17px;gap:12px}
+.logo{width:43px;height:43px;border-radius:12px;background:#000;display:grid;place-items:center;overflow:hidden;flex-shrink:0}.logo img{width:100%;height:100%;object-fit:contain}
+header h2{margin:0;color:#49d9ff;font-size:22px}
+header small{color:#aab8ca}
+#chat{height:calc(100dvh - 175px);overflow-y:auto;padding:15px}
+.msg{padding:14px;margin:12px 0;border-radius:17px;max-width:88%;line-height:1.5;font-size:16px;overflow-wrap:anywhere}
+.user{background:#1767d2;margin-left:auto;border-bottom-right-radius:5px}
+.ai{background:#26364e;margin-right:auto;border-bottom-left-radius:5px}
+.voice{background:transparent;border:0;color:#60d9ff;font-size:19px;padding:5px 8px;float:right}
+.msg img{display:block;max-width:100%;height:auto;max-height:55vh;object-fit:contain;border-radius:12px;margin-top:8px}
+footer{min-height:105px;position:fixed;bottom:0;left:0;right:0;background:#14233a;padding:8px;display:flex;align-items:center;gap:6px}
+input[type=text]{flex:1;width:0;min-width:0;padding:14px 10px;border:1px solid #34445d;background:#202f45;color:white;border-radius:25px;font-size:15px;outline:none}
+button{border:0;cursor:pointer}
+.tool,.mic,.send{height:44px;min-width:42px;flex-shrink:0;border-radius:22px;font-size:18px;color:white;background:#23466d;padding:0 9px}
+.send{background:#1689ed;min-width:45px;font-size:22px}
+.mic{background:#1767d2}
+.mic.listening{background:#e04444}
+#status{text-align:center;color:#9bb4d0;font-size:12px;padding:3px}
+#preview{display:none;max-height:55px;max-width:55px;border-radius:8px;object-fit:cover}
+@media(max-width:380px){footer{gap:4px;padding:6px}.tool,.mic{min-width:36px;padding:0 6px;font-size:16px}input[type=text]{font-size:14px;padding:12px 8px}}
+</style>
+</head>
+<body>
+<header><div class="logo"><img src="up_ai_logo.png" alt="UP AI Logo"></div><div><h2>UP AI</h2><small>आपका अपना AI सहायक</small></div></header>
+<div id="chat"><div class="msg ai">नमस्ते! मैं UP AI हूँ। बताइए, आपकी क्या मदद करूँ?</div></div>
+<div id="status">UP AI तैयार है</div>
+<footer>
+<button class="tool" onclick="choosePhoto('analyze')" title="फोटो समझें">📷</button>
+<button class="tool" onclick="choosePhoto('edit')" title="फोटो एडिट करें">🪄</button>
+<button class="tool" onclick="setGenerate()" title="नई तस्वीर बनाएं">🎨</button>
+<img id="preview" alt="चुनी हुई फोटो">
+<input id="file" type="file" accept="image/*" hidden>
+<button class="mic" id="mic" onclick="listen()" title="बोलकर लिखें">🎤</button>
+<input type="text" id="message" placeholder="यहाँ लिखें या बोलें...">
+<button class="send" onclick="send()">➤</button>
+</footer>
+<script>
+const API="https://upai-backend.onrender.com/chat";
+const chat=document.getElementById("chat");
+const input=document.getElementById("message");
+const statusText=document.getElementById("status");
+const fileInput=document.getElementById("file");
+const preview=document.getElementById("preview");
+let recognition=null,listening=false,lastAnswer="",selectedPhoto=null,mode="chat";
+
+function speak(text){
+ if(!("speechSynthesis" in window)){statusText.textContent="इस ब्राउज़र में स्पीकर उपलब्ध नहीं है";return;}
+ speechSynthesis.cancel();
+ let speech=new SpeechSynthesisUtterance(text);speech.lang="hi-IN";speech.rate=.95;speech.pitch=1;speechSynthesis.speak(speech);
+}
+function addAI(text){
+ let box=document.createElement("div");box.className="msg ai";
+ let content=document.createElement("span");content.textContent=text;
+ let speaker=document.createElement("button");speaker.className="voice";speaker.textContent="🔊";speaker.onclick=()=>speak(text);
+ box.appendChild(speaker);box.appendChild(content);chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
+}
+function addImage(data,mime){
+ let box=document.createElement("div");box.className="msg ai";
+ let image=document.createElement("img");image.alt="UP AI द्वारा तैयार तस्वीर";image.src="data:"+(mime||"image/png")+";base64,"+data;
+ box.appendChild(image);chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
+}
+function choosePhoto(which){
+ mode=which;fileInput.value="";fileInput.click();
+}
+function setGenerate(){
+ selectedPhoto=null;preview.style.display="none";mode="generate";
+ input.placeholder="कैसी तस्वीर बनानी है, लिखें...";
+ input.focus();statusText.textContent="नई तस्वीर का विवरण लिखें और भेजें";
+}
+fileInput.addEventListener("change",()=>{
+ const file=fileInput.files&&fileInput.files[0];if(!file)return;
+ if(!file.type.startsWith("image/")){statusText.textContent="कृपया फोटो चुनें";return;}
+ selectedPhoto=file;mode=mode==="edit"?"edit":"analyze";
+ preview.src=URL.createObjectURL(file);preview.style.display="block";
+ input.placeholder=mode==="edit"?"फोटो में क्या बदलना है?":"फोटो के बारे में क्या पूछना है?";
+ statusText.textContent=mode==="edit"?"फोटो एडिट करने का निर्देश लिखें":"फोटो के बारे में सवाल लिखें";
+});
+async function compressPhoto(file){
+ const bitmap=await createImageBitmap(file);
+ const scale=Math.min(1,1280/Math.max(bitmap.width,bitmap.height));
+ const canvas=document.createElement("canvas");
+ canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+ canvas.getContext("2d").drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
+ const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",.82));
+ if(!blob)throw Error("फोटो तैयार नहीं हुई");
+ if(blob.size>5*1024*1024)throw Error("फोटो 5 MB से छोटी रखें");
+ const data=await new Promise((resolve,reject)=>{
+  const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(",")[1]);reader.onerror=reject;reader.readAsDataURL(blob);
+ });
+ return {mime_type:"image/jpeg",data};
+}
+function listen(){
+ const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SpeechRecognition){statusText.textContent="माइक के लिए Chrome में Speech Recognition सपोर्ट जरूरी है";return;}
+ if(listening){recognition.stop();return;}
+ recognition=new SpeechRecognition();recognition.lang="hi-IN";recognition.continuous=false;recognition.interimResults=false;
+ recognition.onstart=()=>{listening=true;document.getElementById("mic").classList.add("listening");statusText.textContent="🎤 सुन रहा हूँ... बोलिए";};
+ recognition.onresult=event=>{input.value=event.results[0][0].transcript;statusText.textContent="आपकी आवाज़ लिख दी गई है";send();};
+ recognition.onerror=event=>{statusText.textContent="माइक में समस्या: "+event.error;};
+ recognition.onend=()=>{listening=false;document.getElementById("mic").classList.remove("listening");};
+ recognition.start();
+}
+async function send(){
+ const msg=input.value.trim();
+ if(!msg&&!selectedPhoto)return;
+ if(mode==="generate"&&!msg)return;
+ input.value="";
+ let shown=selectedPhoto?(mode==="edit"?"📷 एडिट के लिए फोटो":"📷 फोटो")+(msg?"\n"+msg:""):mode==="generate"?"🎨 नई तस्वीर: "+msg:msg;
+ let u=document.createElement("div");u.className="msg user";u.textContent=shown;chat.appendChild(u);
+ let wait=document.createElement("div");wait.className="msg ai";wait.textContent="UP AI जवाब तैयार कर रहा है...";chat.appendChild(wait);
+ chat.scrollTop=chat.scrollHeight;statusText.textContent="UP AI से संपर्क हो रहा है...";
+ const sentMode=mode,photo=selectedPhoto;
+ mode="chat";selectedPhoto=null;preview.style.display="none";input.placeholder="यहाँ लिखें या बोलें...";
+ try{
+  const payload={message:msg,mode:sentMode};
+  if(photo)payload.image=await compressPhoto(photo);
+  const r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  const data=await r.json();
+  if(!r.ok)throw Error(data.error||"Server error "+r.status);
+  lastAnswer=data.answer||"जवाब नहीं मिला";wait.remove();addAI(lastAnswer);
+  if(data.image)addImage(data.image,data.mime_type);
+  statusText.textContent="UP AI तैयार है";
+ }catch(e){
+  wait.textContent=e.message||"कनेक्शन में समस्या है। दोबारा कोशिश करें।";
+  statusText.textContent="अनुरोध पूरा नहीं हुआ";
+ }
+ chat.scrollTop=chat.scrollHeight;
+}
+input.addEventListener("keydown",e=>{if(e.key==="Enter")send();});
+</script>
+</body>
+</html>
