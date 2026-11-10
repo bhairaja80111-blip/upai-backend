@@ -99,6 +99,12 @@ def gemini_request(model, prompt, image=None, json_mode=False):
             )
             if response.ok:
                 break
+            print(
+                "Gemini HTTP error:",
+                response.status_code,
+                response.text[:500],
+                flush=True
+            )
             if response.status_code not in (408, 429, 500, 502, 503, 504):
                 raise RuntimeError("PROVIDER_REJECTED")
             if attempt == max_attempts - 1:
