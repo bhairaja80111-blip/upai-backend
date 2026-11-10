@@ -109,7 +109,13 @@ def gemini_request(model, prompt, image=None, json_mode=False):
                 raise RuntimeError("PROVIDER_REJECTED")
             if attempt == max_attempts - 1:
                 raise RuntimeError("PROVIDER_BUSY")
-        except requests.RequestException:
+        except requests.RequestException as e:
+            print(
+                "Gemini connection error:",
+                type(e).__name__,
+                str(e)[:300],
+                flush=True
+            )
             if attempt == max_attempts - 1:
                 raise RuntimeError("PROVIDER_CONNECTION")
         if attempt < max_attempts - 1:
