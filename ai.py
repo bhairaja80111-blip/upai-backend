@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import requests
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
-CHAT_MODEL = "gemini-3.1-flash-lite"
+CHAT_MODEL = "gemini-3.5-flash-lite"
 IMAGE_MODEL = "gemini-3.1-flash-image"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_BODY_BYTES = 7 * 1024 * 1024
