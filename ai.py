@@ -46,7 +46,7 @@ SYSTEM_INSTRUCTION = """तुम UP AI हो, राजा द्वारा 
 तुम्हारी बातचीत एक समझदार और अच्छे दोस्त जैसी होनी चाहिए।
 न ज्यादा चापलूसी, न गुलामी, न बेवजह का रवैया।"""
 
-def gemini_request(model, prompt, image=None):
+def gemini_request(model, prompt, image=None, json_mode=False):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("SERVER_KEY_MISSING")
@@ -72,6 +72,20 @@ def gemini_request(model, prompt, image=None):
                 payload["response_format"] = {
                     "type": "image",
                     "mime_type": "image/jpeg"
+                }
+            elif json_mode:
+                payload["response_format"] = {
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "answer": {"type": "string"},
+                            "x": {"type": ["number", "null"]},
+                            "y": {"type": ["number", "null"]}
+                        },
+                        "required": ["answer", "x", "y"]
+                    }
                 }
 
             response = requests.post(
@@ -185,7 +199,7 @@ class Handler(BaseHTTPRequestHandler):
 
             data = json.loads(self.rfile.read(length).decode("utf-8"))
             mode = str(data.get("mode", "chat")).lower()
-            if mode not in ("chat", "analyze", "generate", "edit"):
+            if mode not in ("chat", "analyze", "live_analyze", "generate", "edit"):
                 self.send_json({"error": "गलत अनुरोध प्रकार।"}, 400)
                 return
 
@@ -196,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "पहले अपना संदेश लिखें।"}, 400)
                 return
 
-            if mode in ("analyze", "edit") and not image:
+            if mode in ("analyze", "live_analyze", "edit") and not image:
                 self.send_json({"error": "पहले फोटो चुनें।"}, 400)
                 return
 
@@ -253,6 +267,19 @@ class Handler(BaseHTTPRequestHandler):
             elif mode == "analyze":
                 prompt += "\nयूज़र ने एक फोटो भेजी है। फोटो को ध्यान से देखकर उसके सवाल का हिंदी में जवाब दो। अगर सवाल नहीं लिखा है तो फोटो में क्या दिखाई दे रहा है, उसका साफ और उपयोगी वर्णन करो।\nसवाल: " + (message or "इस फोटो में क्या दिखाई दे रहा है?")
                 model = CHAT_MODEL
+            elif mode == "live_analyze":
+                prompt += (
+                    "\nतुम UP AI लाइव स्क्रीन गाइड हो। स्क्रीनशॉट देखकर यूज़र को "
+                    "अगला सही कदम आसान हिंदी में बताओ। जवाब केवल एक वैध JSON object हो, "
+                    "कोई Markdown या अतिरिक्त टेक्स्ट नहीं। प्रारूप: "
+                    '{"answer":"हिंदी में छोटा निर्देश","x":0.5,"y":0.5}. '
+                    "x और y स्क्रीन की चौड़ाई और ऊँचाई के अनुपात में 0 से 1 तक हों। "
+                    "जिस बटन या कंट्रोल को दबाना है उसके केंद्र की जगह बताओ। "
+                    "यदि लक्ष्य स्पष्ट नहीं है तो x और y दोनों null रखो। "
+                    "पासवर्ड, OTP या निजी जानकारी को पढ़ने या दोहराने की कोशिश मत करो। "
+                    "यूज़र का काम/सवाल: " + (message or "स्क्रीन देखकर अगला कदम बताओ।")
+                )
+                model = CHAT_MODEL
             elif mode == "generate":
                 prompt = "Create an image based on this user request. Follow safety rules. User request: " + message
                 model = IMAGE_MODEL
@@ -269,7 +296,10 @@ class Handler(BaseHTTPRequestHandler):
                 model = IMAGE_MODEL
 
             try:
-                answer, generated = gemini_request(model, prompt, clean_image)
+                answer, generated = gemini_request(
+                    model, prompt, clean_image,
+                    json_mode=(mode == "live_analyze")
+                )
             except Exception:
                 if mode != "chat":
                     raise
